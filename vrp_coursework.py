@@ -5,6 +5,7 @@ Provides:
 - data structures for depot/customers/demands
 - naive greedy (nearest neighbour) solver
 - Clarke-Wright savings solver with optional 2-opt local search
+- Or-opt inter-route relocation solver
 - benchmarking utilities and simple plotting
 
 Run as a script to see an example and generate comparison plots.
@@ -44,12 +45,11 @@ class VRP:
         return m
 
     def total_distance(self, routes: List[List[int]]) -> float:
-        # routes: each route is list of customer indices (0-based). Must start and end implicitly at depot.
         total = 0.0
         for route in routes:
             if not route:
                 continue
-            prev = 0  # depot index in matrix
+            prev = 0
             for c in route:
                 total += self.distance_matrix[prev][c + 1]
                 prev = c + 1
@@ -64,13 +64,11 @@ class VRP:
                 break
             route = []
             load = 0
-            current = 0  # depot index in matrix
+            current = 0
             while True:
-                # candidate customers that fit remaining capacity
                 candidates = [c for c in unvisited if load + self.demands[c] <= self.vehicle_capacity]
                 if not candidates:
                     break
-                # choose nearest from current
                 nearest = min(candidates, key=lambda c: self.distance_matrix[current][c + 1])
                 route.append(nearest)
                 load += self.demands[nearest]
@@ -80,19 +78,16 @@ class VRP:
         return routes
 
     def clarke_wright_savings(self, do_2opt: bool = True) -> List[List[int]]:
-        # Initialize each customer in its own route if feasible
         routes = {i: [i] for i in range(self.n)}
         route_load = {i: self.demands[i] for i in range(self.n)}
 
-        # compute savings
         savings = []
         for i in range(self.n):
             for j in range(i + 1, self.n):
                 sij = self.distance_matrix[0][i + 1] + self.distance_matrix[0][j + 1] - self.distance_matrix[i + 1][j + 1]
                 savings.append((sij, i, j))
-        savings.sort(reverse=True)  # largest savings first
+        savings.sort(reverse=True)
 
-        # helper to find route id containing customer
         def find_route(containing: int):
             for rid, r in routes.items():
                 if containing in r:
@@ -104,22 +99,19 @@ class VRP:
             rj = find_route(j)
             if ri is None or rj is None or ri == rj:
                 continue
-            # only merge if i is at one end of ri and j at one end of rj
             r_i = routes[ri]
             r_j = routes[rj]
             if (i == r_i[0] or i == r_i[-1]) and (j == r_j[0] or j == r_j[-1]):
                 combined_load = route_load[ri] + route_load[rj]
                 if combined_load <= self.vehicle_capacity:
-                    # merge with correct orientation
                     if i == r_i[-1] and j == r_j[0]:
                         new_route = r_i + r_j
                     elif i == r_i[0] and j == r_j[-1]:
                         new_route = list(reversed(r_i)) + list(reversed(r_j))
                     elif i == r_i[-1] and j == r_j[-1]:
                         new_route = r_i + list(reversed(r_j))
-                    else:  # i==r_i[0] and j==r_j[0]
+                    else:
                         new_route = list(reversed(r_i)) + r_j
-                    # create new route id and remove old ones
                     new_id = min(ri, rj)
                     del routes[ri]
                     del routes[rj]
@@ -130,8 +122,7 @@ class VRP:
 
         if do_2opt:
             for idx, r in enumerate(result_routes):
-                improved = self._two_opt_route(r)
-                result_routes[idx] = improved
+                result_routes[idx] = self._two_opt_route(r)
 
         return result_routes
 
@@ -179,53 +170,81 @@ def generate_random_instance(n_customers: int, area_size: int = 100, max_demand:
 
 
 def benchmark(instance: VRP):
+    # imported here instead of top of file to avoid circular import:
+    # vrp_ai_advanced -> vrp_core -> vrp_coursework -> vrp_ai_advanced
+    from vrp_ai_advanced import solve as or_opt_solve
+
     results = {}
+
+    # --- Greedy nearest neighbour ---
     t0 = time.time()
     g_routes = instance.greedy_nearest_neighbor()
     tg = time.time() - t0
-    dg = instance.total_distance(g_routes)
-    results['greedy'] = (dg, tg, g_routes)
+    results['greedy'] = (instance.total_distance(g_routes), tg, g_routes)
 
+    # --- Clarke-Wright + 2-opt ---
     t0 = time.time()
     cw_routes = instance.clarke_wright_savings(do_2opt=True)
     tcw = time.time() - t0
-    dcw = instance.total_distance(cw_routes)
-    results['clarke_wright'] = (dcw, tcw, cw_routes)
+    results['clarke_wright'] = (instance.total_distance(cw_routes), tcw, cw_routes)
+
+    # --- Clarke-Wright + 2-opt + Or-opt ---
+    t0 = time.time()
+    or_routes = or_opt_solve(instance)
+    tor = time.time() - t0
+    results['or_opt'] = (instance.total_distance(or_routes), tor, or_routes)
+
     return results
 
 
 def plot_comparison(instances_info: List[Tuple[str, VRP, dict]]):
-    labels = []
+    import os
+    os.makedirs('outputs', exist_ok=True)
+
+    labels      = []
     greedy_vals = []
-    cw_vals = []
+    cw_vals     = []
+    or_vals     = []
+
     for name, inst, res in instances_info:
         labels.append(name)
         greedy_vals.append(res['greedy'][0])
         cw_vals.append(res['clarke_wright'][0])
+        or_vals.append(res['or_opt'][0])
 
-    x = range(len(labels))
-    width = 0.35
-    fig, ax = plt.subplots()
-    ax.bar([i - width / 2 for i in x], greedy_vals, width, label='Greedy')
-    ax.bar([i + width / 2 for i in x], cw_vals, width, label='Clarke-Wright + 2-opt')
+    x     = list(range(len(labels)))
+    width = 0.25
+
+    fig, ax = plt.subplots(figsize=(10, 5))
+    ax.bar([i - width for i in x], greedy_vals, width, label='Greedy NN',              color='C0')
+    ax.bar([i          for i in x], cw_vals,    width, label='Clarke-Wright + 2-opt',  color='C1')
+    ax.bar([i + width  for i in x], or_vals,    width, label='Clarke-Wright + Or-opt', color='C2')
+
     ax.set_ylabel('Total distance')
-    ax.set_title('Algorithm comparison')
+    ax.set_title('Algorithm comparison: Greedy vs Clarke-Wright vs Or-opt')
     ax.set_xticks(x)
     ax.set_xticklabels(labels)
     ax.legend()
     plt.tight_layout()
-    plt.savefig('vrp_comparison.png')
+    plt.savefig('outputs/vrp_comparison.png')
     plt.close()
+    print('Saved comparison plot to outputs/vrp_comparison.png')
 
 
 if __name__ == '__main__':
-    # Example: compare on 3 random instances
     instances = []
     for n in (10, 20, 40):
-        inst = generate_random_instance(n_customers=n, area_size=50, max_demand=4, vehicle_capacity=15, num_vehicles=6, seed=42 + n)
+        inst = generate_random_instance(
+            n_customers=n, area_size=50, max_demand=4,
+            vehicle_capacity=15, num_vehicles=6, seed=42 + n
+        )
         res = benchmark(inst)
         instances.append((f'n={n}', inst, res))
-        print(f"Instance n={n}: greedy dist={res['greedy'][0]:.2f} time={res['greedy'][1]:.4f}s; cw dist={res['clarke_wright'][0]:.2f} time={res['clarke_wright'][1]:.4f}s")
+        print(
+            f"Instance n={n}: "
+            f"greedy={res['greedy'][0]:.2f} ({res['greedy'][1]:.4f}s) | "
+            f"clarke_wright={res['clarke_wright'][0]:.2f} ({res['clarke_wright'][1]:.4f}s) | "
+            f"or_opt={res['or_opt'][0]:.2f} ({res['or_opt'][1]:.4f}s)"
+        )
 
     plot_comparison(instances)
-    print('Saved comparison plot to vrp_comparison.png')
