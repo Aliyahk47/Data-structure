@@ -8,7 +8,7 @@ def clarke_wright_savings(instance):
     Returns:
         List of routes (list of customer indices)
     """
-    return instance.clarke_wright_savings(do_2opt=True)
+    return instance.clarke_wright_savings(do_2opt=False)
 
 __all__ = ["clarke_wright_savings"]
 """Improved VRP solver: Clarke-Wright savings + optional 2-opt local search.

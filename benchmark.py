@@ -7,25 +7,33 @@ from typing import List, Tuple
 import matplotlib.pyplot as plt
 
 
-def plot_comparison(instances_info: List[Tuple[str, object, dict]], outpath: str = 'vrp_comparison.png'):
+def plot_comparison(instances_info, outpath='outputs/final_comparison.png'):
     labels = []
     greedy_vals = []
     cw_vals = []
+    or_vals = []  # Add this list
+
     for name, inst, res in instances_info:
         labels.append(name)
         greedy_vals.append(res['greedy'][0])
         cw_vals.append(res['clarke_wright'][0])
+        or_vals.append(res['or_opt'][0])  # Extract Or-opt results
 
     x = range(len(labels))
-    width = 0.35
-    fig, ax = plt.subplots()
-    ax.bar([i - width / 2 for i in x], greedy_vals, width, label='Greedy')
-    ax.bar([i + width / 2 for i in x], cw_vals, width, label='Clarke-Wright + 2-opt')
+    width = 0.25 # Make bars thinner to fit three
+    fig, ax = plt.subplots(figsize=(10, 6))
+
+    # Add the three bar sets
+    ax.bar([i - width for i in x], greedy_vals, width, label='Greedy')
+    ax.bar([i for i in x], cw_vals, width, label='Clarke-Wright')
+    ax.bar([i + width for i in x], or_vals, width, label='Or-opt + 2-opt')
+
     ax.set_ylabel('Total distance')
-    ax.set_title('Algorithm comparison')
+    ax.set_title('Algorithm Comparison (Including AI Or-opt)')
     ax.set_xticks(x)
     ax.set_xticklabels(labels)
     ax.legend()
+    
     plt.tight_layout()
     fig.savefig(outpath)
     plt.close(fig)

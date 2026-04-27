@@ -12,6 +12,7 @@ import test_data_2_small
 import test_data_3_medium
 import test_data_4_large
 import test_data_5_constrained
+import test_data_6_stress
 
 def run_python_file_tests():
     os.makedirs('outputs', exist_ok=True)
@@ -22,7 +23,8 @@ def run_python_file_tests():
         test_data_2_small,
         test_data_3_medium,
         test_data_4_large,
-        test_data_5_constrained
+        test_data_5_constrained,
+        test_data_6_stress
     ]
     
     instances_info = []
