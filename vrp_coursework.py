@@ -13,7 +13,6 @@ Run as a script to see an example and generate comparison plots.
 import math
 import random
 import time
-import copy
 from typing import List, Tuple
 
 import matplotlib.pyplot as plt

@@ -18,7 +18,7 @@ Point = Tuple[float, float]
 
 
 class VRP:
-    def __init__(self, depot: Point, customers: List[Point], demands: List[int], vehicle_capacity: int, num_vehicles: int = None):
+    def __init__(self, depot, customers, demands, vehicle_capacity, num_vehicles=None):
         self.depot = depot
         self.customers = customers
         self.demands = demands
@@ -27,6 +27,17 @@ class VRP:
         self.n = len(customers)
         self.distance_matrix = self._compute_distance_matrix()
 
+    @classmethod
+    def from_dict(cls, data_dict):
+        """Creates a VRP instance from a dictionary found in the test files."""
+        return cls(
+            depot=data_dict['depot'],
+            customers=data_dict['customers'],
+            demands=data_dict['demands'],
+            vehicle_capacity=data_dict['vehicle_capacity'],
+            num_vehicles=data_dict.get('num_vehicles')
+        )
+    
     def _compute_distance_matrix(self) -> List[List[float]]:
         points = [self.depot] + self.customers
         n = len(points)
